@@ -1,6 +1,5 @@
 import React from 'react';
-import { X, Bot, Terminal, Shield, Check } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 
 interface DocsModalProps {
   isOpen: boolean;
