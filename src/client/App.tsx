@@ -236,17 +236,17 @@ export default function App() {
 
       {/* Modern Footer */}
       <footer className="w-full max-w-4xl mx-auto py-6 px-4 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-slate-900">
-        <p>© 2026 Tanu-XAI Engine. Zero-Database Multi-File Auth.</p>
+        <p>© 2026 Tanu-XAI Engine.</p>
         <div className="flex items-center gap-4">
           <button
             type="button"
             onClick={() => setIsDocsOpen(true)}
             className="hover:text-slate-300 transition cursor-pointer"
           >
-            Bot Integration Docs
+            Made By Arman | HTX
           </button>
           <span>•</span>
-          <span className="text-slate-600 font-mono">Baileys v7.0.0-rc14</span>
+          <span className="text-slate-600 font-mono">Owner ki Owner Tanu Darling</span>
         </div>
       </footer>
 
