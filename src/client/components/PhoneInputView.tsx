@@ -166,7 +166,7 @@ export const PhoneInputView: React.FC<PhoneInputViewProps> = ({ onSubmit, isLoad
       {/* Security Reassurance */}
       <div className="mt-6 pt-5 border-t border-slate-800/80 flex items-center justify-center gap-2 text-slate-500 text-xs">
         <ShieldCheck className="w-4 h-4 text-emerald-400/80" />
-        <span>Zero database storage • Direct ephemeral Baileys v7 handshake</span>
+        <span>Tanu Darling Session Generator</span>
       </div>
     </motion.div>
   );
