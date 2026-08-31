@@ -128,7 +128,7 @@ export const PhoneInputView: React.FC<PhoneInputViewProps> = ({ onSubmit, isLoad
 
           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 px-1">
             <span>Example: {selectedCountry.dialCode} {selectedCountry.placeholder || '3001234567'}</span>
-            <span className="font-mono text-slate-400">Direct Baileys v7 Auth</span>
+            <span className="font-mono text-slate-400">Tanu-XAI Auth</span>
           </div>
         </div>
 
