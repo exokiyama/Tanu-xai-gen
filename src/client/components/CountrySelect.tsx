@@ -121,7 +121,7 @@ export const CountrySelect: React.FC<CountrySelectProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search country or code (e.g. +92, US, India)..."
+                  placeholder="Search country or code (e.g. +91, US, Pakistan)..."
                   className="w-full pl-9 pr-8 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/30 transition font-sans"
                 />
                 {searchQuery && (
