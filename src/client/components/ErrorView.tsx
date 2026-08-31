@@ -28,7 +28,7 @@ export const ErrorView: React.FC<ErrorViewProps> = ({ message, onRetry }) => {
       <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs text-slate-400 text-left space-y-1">
         <p className="font-semibold text-slate-300">Common fixes:</p>
         <ul className="list-disc pl-4 space-y-0.5">
-          <li>Ensure phone number includes valid country code (e.g. +92 for Pakistan).</li>
+          <li>Ensure phone number includes valid country code (e.g. +91 for India).</li>
           <li>Make sure your WhatsApp mobile app is updated and connected to the internet.</li>
           <li>If a previous session was active, wait 30 seconds before retrying.</li>
         </ul>
