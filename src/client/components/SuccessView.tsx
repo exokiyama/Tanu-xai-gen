@@ -48,7 +48,7 @@ export const SuccessView: React.FC<SuccessViewProps> = ({ sessionString, onReset
         <div>
           <span className="font-semibold text-emerald-200">Sent to your WhatsApp:</span>
           <p className="text-emerald-300/90 mt-0.5">
-            The raw session string and setup guide card have been delivered directly to your WhatsApp private chat.
+            Session ID is successfully connected & send to your whatsapp.
           </p>
         </div>
       </div>
@@ -111,7 +111,7 @@ export const SuccessView: React.FC<SuccessViewProps> = ({ sessionString, onReset
       <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5 text-xs text-amber-300">
         <ShieldAlert className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
         <p>
-          <strong className="text-amber-200">Security Warning:</strong> Keep this session token confidential. Never share it publicly or post it in public repositories.
+          <strong className="text-amber-200">Security Warning:</strong> Keep this session token confidential. Never share it publicly .
         </p>
       </div>
 
