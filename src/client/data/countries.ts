@@ -6,7 +6,7 @@ export interface Country {
   placeholder?: string;
 }
 
-export const POPULAR_COUNTRY_CODES = ['PK', 'IN', 'NG', 'BD', 'ID', 'BR', 'US', 'GB', 'KE', 'ZA', 'EG', 'PH', 'AE', 'SA'];
+export const POPULAR_COUNTRY_CODES = ['IN', 'PK', 'NG', 'BD', 'ID', 'BR', 'US', 'GB', 'KE', 'ZA', 'EG', 'PH', 'AE', 'SA'];
 
 export const COUNTRIES: Country[] = [
   { name: 'Pakistan', code: 'PK', dialCode: '+92', flag: '🇵🇰', placeholder: '300 1234567' },
