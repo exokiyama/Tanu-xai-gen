@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { BufferJSON } from '@whiskeysockets/baileys';
 import QRCode from 'qrcode';
 import { env } from '../config/env.js';
 import { logger } from '../utils/logger.js';
@@ -183,6 +182,7 @@ async function initiateSocket(session) {
   });
 
   session.sock = sock;
+  session.saveCreds = saveCreds;
 
   // If pairing code mode, request pairing code from Baileys
   if (mode === 'pairing' && phoneNumber) {
@@ -236,6 +236,7 @@ async function reconnectSocket(session) {
     });
 
     session.sock = sock;
+    session.saveCreds = saveCreds;
     logger.info({ sessionId }, 'Baileys socket reconnected successfully');
   } catch (err) {
     logger.error({ sessionId, err }, 'Failed to reconnect Baileys socket');
@@ -304,92 +305,77 @@ async function finalizeSession(sessionId) {
   session.status = 'session_generating';
 
   try {
-    const credsPath = path.join(session.tempDir, 'creds.json');
-    const keysDir = path.join(session.tempDir, 'keys');
-
-    // Ensure creds.json is flushed to disk
-    let attempts = 0;
-
-    while (!fs.existsSync(credsPath) && attempts < 10) {
-      await new Promise((r) => setTimeout(r, 400));
-      attempts++;
-    }
-
-    if (!fs.existsSync(credsPath)) {
-      throw new Error(
-        'Authentication credentials file (creds.json) was not written by Baileys.'
-      );
-    }
-
-    // Read creds.json
-    const credsRaw = fs.readFileSync(credsPath, 'utf8');
-    const credsObj = JSON.parse(credsRaw);
-
     /*
-     * IMPORTANT:
-     * Baileys useMultiFileAuthState() stores authentication data in:
-     *
-     *   creds.json
-     *   keys/
-     *
-     * The old code only serialized creds.json.
-     * That produced an incomplete SESSION_ID.
-     *
-     * Here we serialize both creds.json and every JSON file
-     * inside keys/ so the bot can restore the complete auth state.
+     * Give Baileys a moment to finish its final auth writes.
+     * We also explicitly call saveCreds() before reading the files.
      */
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    const authState = {
-      version: 1,
-      creds: credsObj,
-      keys: {}
-    };
-
-    // Read all Baileys key files
-    if (fs.existsSync(keysDir)) {
-      const keyFiles = fs
-        .readdirSync(keysDir)
-        .filter((file) => file.endsWith('.json'));
-
-      for (const fileName of keyFiles) {
-        const filePath = path.join(keysDir, fileName);
-
-        try {
-          const keyRaw = fs.readFileSync(filePath, 'utf8');
-
-          if (!keyRaw.trim()) {
-            continue;
-          }
-
-          authState.keys[fileName] = JSON.parse(keyRaw);
-        } catch (keyErr) {
-          logger.warn(
-            {
-              sessionId,
-              fileName,
-              err: keyErr
-            },
-            'Failed to read one Baileys auth key file'
-          );
-        }
+    if (typeof session.saveCreds === 'function') {
+      try {
+        await session.saveCreds();
+      } catch (err) {
+        logger.warn({ sessionId, err }, 'Final saveCreds() call failed; continuing with on-disk auth state');
       }
     }
 
-    const keyCount = Object.keys(authState.keys).length;
+    const credsPath = path.join(session.tempDir, 'creds.json');
+    const keysDir = path.join(session.tempDir, 'keys');
 
-    if (keyCount === 0) {
+    if (!fs.existsSync(credsPath)) {
+      throw new Error('Authentication credentials file (creds.json) was not written by Baileys.');
+    }
+
+    /*
+     * IMPORTANT:
+     *
+     * Do NOT JSON.parse()/JSON.stringify() Baileys auth files here.
+     * Baileys uses BufferJSON on disk and Signal keys contain binary data.
+     * Re-serializing those objects can turn a 32-byte private key into a
+     * plain object/string and later causes:
+     *
+     *   Incorrect private key length: 44
+     *
+     * Instead, SESSION_ID v2 stores the EXACT raw bytes of every auth file.
+     * The bot writes those bytes back unchanged before calling
+     * useMultiFileAuthState().
+     */
+    const files = {};
+
+    const addRawFile = (relativeName, absolutePath) => {
+      const raw = fs.readFileSync(absolutePath);
+      files[relativeName.replace(/\\/g, '/')] = raw.toString('base64');
+    };
+
+    addRawFile('creds.json', credsPath);
+
+    let keyFiles = [];
+
+    if (fs.existsSync(keysDir)) {
+      keyFiles = fs
+        .readdirSync(keysDir, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+        .map((entry) => entry.name);
+
+      for (const fileName of keyFiles) {
+        addRawFile(`keys/${fileName}`, path.join(keysDir, fileName));
+      }
+    }
+
+    if (keyFiles.length === 0) {
       logger.warn(
         { sessionId },
         'No Baileys key files found in keys/. Session may be incomplete.'
       );
     }
 
-    // Serialize the COMPLETE auth state using Baileys BufferJSON replacer
-    const serialized = JSON.stringify(
-      authState,
-      BufferJSON.replacer
-    );
+    const authState = {
+      version: 2,
+      format: 'tanu-xai-raw-multifile-auth',
+      files
+    };
 
+    const serialized = JSON.stringify(authState);
     const base64Session = Buffer
       .from(serialized, 'utf8')
       .toString('base64');
@@ -402,22 +388,17 @@ async function finalizeSession(sessionId) {
     logger.info(
       {
         sessionId,
-        keyFiles: keyCount,
+        keyFiles: keyFiles.length,
+        authFiles: Object.keys(files).length,
         sessionLength: sessionString.length
       },
-      'Tanu-XAI complete session generated successfully'
+      'Tanu-XAI v2 raw auth session generated successfully'
     );
 
-    // Deliver WhatsApp DMs to the connected account
     const userJid = session.sock?.user?.id;
 
     if (userJid) {
-      // Normalize JID:
-      // 923001234567:1@s.whatsapp.net
-      // ->
-      // 923001234567@s.whatsapp.net
-      const cleanJid =
-        userJid.split(':')[0] + '@s.whatsapp.net';
+      const cleanJid = userJid.split(':')[0] + '@s.whatsapp.net';
 
       await sendSessionMessages(
         session.sock,
@@ -426,17 +407,12 @@ async function finalizeSession(sessionId) {
       );
     }
 
-    // Terminate socket and schedule safe disk cleanup
     setTimeout(() => {
       cleanupSessionResources(sessionId);
     }, 2500);
-
   } catch (err) {
     logger.error(
-      {
-        sessionId,
-        err
-      },
+      { sessionId, err },
       'Failed to finalize Tanu-XAI session'
     );
 
