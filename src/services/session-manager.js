@@ -291,7 +291,10 @@ async function handleConnectionUpdate(sessionId, update) {
 }
 
 /**
- * Finalizes successful authentication: serializes creds.json, delivers WhatsApp DM, and sets session_ready.
+ * Finalizes successful authentication:
+ * serializes the complete Baileys multi-file auth state
+ * (creds.json + keys/*), delivers WhatsApp DM, and sets session_ready.
+ *
  * @param {string} sessionId
  */
 async function finalizeSession(sessionId) {
@@ -302,37 +305,125 @@ async function finalizeSession(sessionId) {
 
   try {
     const credsPath = path.join(session.tempDir, 'creds.json');
+    const keysDir = path.join(session.tempDir, 'keys');
 
     // Ensure creds.json is flushed to disk
     let attempts = 0;
+
     while (!fs.existsSync(credsPath) && attempts < 10) {
       await new Promise((r) => setTimeout(r, 400));
       attempts++;
     }
 
     if (!fs.existsSync(credsPath)) {
-      throw new Error('Authentication credentials file (creds.json) was not written by Baileys.');
+      throw new Error(
+        'Authentication credentials file (creds.json) was not written by Baileys.'
+      );
     }
 
+    // Read creds.json
     const credsRaw = fs.readFileSync(credsPath, 'utf8');
     const credsObj = JSON.parse(credsRaw);
 
-    // Serialize creds using Baileys BufferJSON replacer
-    const serialized = JSON.stringify(credsObj, BufferJSON.replacer);
-    const base64Session = Buffer.from(serialized).toString('base64');
+    /*
+     * IMPORTANT:
+     * Baileys useMultiFileAuthState() stores authentication data in:
+     *
+     *   creds.json
+     *   keys/
+     *
+     * The old code only serialized creds.json.
+     * That produced an incomplete SESSION_ID.
+     *
+     * Here we serialize both creds.json and every JSON file
+     * inside keys/ so the bot can restore the complete auth state.
+     */
+
+    const authState = {
+      version: 1,
+      creds: credsObj,
+      keys: {}
+    };
+
+    // Read all Baileys key files
+    if (fs.existsSync(keysDir)) {
+      const keyFiles = fs
+        .readdirSync(keysDir)
+        .filter((file) => file.endsWith('.json'));
+
+      for (const fileName of keyFiles) {
+        const filePath = path.join(keysDir, fileName);
+
+        try {
+          const keyRaw = fs.readFileSync(filePath, 'utf8');
+
+          if (!keyRaw.trim()) {
+            continue;
+          }
+
+          authState.keys[fileName] = JSON.parse(keyRaw);
+        } catch (keyErr) {
+          logger.warn(
+            {
+              sessionId,
+              fileName,
+              err: keyErr
+            },
+            'Failed to read one Baileys auth key file'
+          );
+        }
+      }
+    }
+
+    const keyCount = Object.keys(authState.keys).length;
+
+    if (keyCount === 0) {
+      logger.warn(
+        { sessionId },
+        'No Baileys key files found in keys/. Session may be incomplete.'
+      );
+    }
+
+    // Serialize the COMPLETE auth state using Baileys BufferJSON replacer
+    const serialized = JSON.stringify(
+      authState,
+      BufferJSON.replacer
+    );
+
+    const base64Session = Buffer
+      .from(serialized, 'utf8')
+      .toString('base64');
+
     const sessionString = `${env.SESSION_PREFIX}${base64Session}`;
 
     session.session = sessionString;
     session.status = 'session_ready';
 
-    logger.info({ sessionId }, 'Tanu-XAI session generated successfully');
+    logger.info(
+      {
+        sessionId,
+        keyFiles: keyCount,
+        sessionLength: sessionString.length
+      },
+      'Tanu-XAI complete session generated successfully'
+    );
 
     // Deliver WhatsApp DMs to the connected account
     const userJid = session.sock?.user?.id;
+
     if (userJid) {
-      // Normalize JID: e.g. 923001234567:1@s.whatsapp.net -> 923001234567@s.whatsapp.net
-      const cleanJid = userJid.split(':')[0] + '@s.whatsapp.net';
-      await sendSessionMessages(session.sock, cleanJid, sessionString);
+      // Normalize JID:
+      // 923001234567:1@s.whatsapp.net
+      // ->
+      // 923001234567@s.whatsapp.net
+      const cleanJid =
+        userJid.split(':')[0] + '@s.whatsapp.net';
+
+      await sendSessionMessages(
+        session.sock,
+        cleanJid,
+        sessionString
+      );
     }
 
     // Terminate socket and schedule safe disk cleanup
@@ -341,11 +432,20 @@ async function finalizeSession(sessionId) {
     }, 2500);
 
   } catch (err) {
-    logger.error({ sessionId, err }, 'Failed to finalize Tanu-XAI session');
-    failSession(sessionId, 'Failed to serialize session credentials.');
+    logger.error(
+      {
+        sessionId,
+        err
+      },
+      'Failed to finalize Tanu-XAI session'
+    );
+
+    failSession(
+      sessionId,
+      'Failed to serialize complete session.'
+    );
   }
 }
-
 /**
  * Mark session as failed and clean up.
  * @param {string} sessionId
