@@ -149,10 +149,10 @@ Do NOT share this session ID with anyone. Anyone with this key has access to aut
 *🚀 HOW TO USE IN YOUR BOT:*
 1. Copy the raw session string sent above.
 2. Add it as an environment variable in your deployment:
-   \`SESSION_ID=${sessionString}\`
+   \`SESSION_ID=Tanu-XAI~..\`
 3. Start your Tanu-XAI Bot.
 
-_Powered by Tanu-XAI Architecture (Baileys v7.0.0-rc14)_`;
+_Powered by Tanu-XAI Architecture_`;
 
     await sock.sendMessage(jid, {
       text: cardMessage
